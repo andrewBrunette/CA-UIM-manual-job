@@ -1,5 +1,3 @@
-# ca-uim-native
-CA-UIM playbook for installation on RHEL.  This is a partly ansibilized version of the CA UIM installer, targeted at RHEL 6.  It uses CA's provision.sh to do the install.  
+# ca-uim-manual-job
 
-
-Extra text added to make jimb happy that something is going on
+CA-UIM playbook for installation on RHEL.  This is a demonstration project for new Runner users.  This particular version is oriented to being run as a manual job to demonstrate testing of a Runner job.  
