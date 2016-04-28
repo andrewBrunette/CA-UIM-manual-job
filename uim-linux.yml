@@ -1,0 +1,84 @@
+---
+
+- name: UIM Server Build and Install
+  hosts: localhost
+  gather_facts: true
+  connection: local
+  vars:
+    server_name: UIMTST
+    server_count: 1
+    def_cpu: 4
+    def_mem: 8
+    type: standard
+
+
+  tasks:
+  - name: Provision RHEL Server
+    clc_server:
+      name: "{{server_name}}"
+      template: rhel-6-64
+      password: "{{ server_password }}"
+      group: "{{ server_group }}"
+      count: "{{server_count}}"
+      location: "{{datacenter_name}}"
+      storage_type: "standard"
+      additional_disks:
+      - sizeGB: 350
+        type: partitioned
+        path: /uim
+      - sizeGB: 50
+        type: partitioned
+        path: /tmp
+      cpu: "{{def_cpu}}"
+      memory: "{{def_mem}}"
+    register: provisioned
+  - name: Wait for ssh to come up on the server
+    command: sleep 30
+  - name: "Add server to in-memory Group"
+    add_host:
+      name={{ item.name }}
+      ansible_ssh_host={{ item.ipaddress }}
+      ansible_ssh_user=root
+      ansible_ssh_pass="{{ server_password }}"
+      groupname="Servers"
+    with_flattened: provisioned.servers
+
+- name: Install s3cmd
+  hosts: Servers
+  gather_facts: true
+  connection: ssh
+  tasks:
+  - name: yum cleanup
+    shell: yum-complete-transaction -y
+  - name: yum cleanup 2
+    shell: yum-complete-transaction -y
+  - name: yum cleanup 3
+    shell: yum-complete-transaction -y
+  - name: install the core
+    shell: yum -y install s3cmd
+  - name: configure s3cmd
+    template: src=.s3cfg dest=/root/.s3cfg
+
+- name: Install UIM
+  hosts: Servers
+  gather_facts: true
+  connection: ssh
+
+  tasks:
+  - name: create install dir
+    file: path=/uim state=directory
+  - name: file retrieve
+    shell: s3cmd get s3://test-installer/uim.zip
+  - name: move file to install directory
+    shell: mv uim.zip /uim
+  - name: unarchive
+    unarchive: src=/uim/uim.zip dest=/uim copy=no
+  - name: properties file setup
+    lineinfile: dest=/uim/NMS_installer.properties regexp=DB_ADMIN_USER=root line=DB_ADMIN_USER={{ db_admin_username }}
+    lineinfile: dest=/uim/NMS_installer.properties regexp=DB_ADMIN_PASSWORD=nimsoft line=DB_ADMIN_PASSWORD={{ db_admin_password }}
+    lineinfile: dest=/uim/NMS_installer.properties regexp=NIM_USER=administrator line=NIM_USER={{ uim_admin_username }}
+    lineinfile: dest=/uim/NMS_installer.properties regexp=NMS_PASSWORD=nimsoft line=NIM_USER={{ uim_admin_password }}
+    lineinfile: dest=/uim/NMS_installer.properties regexp=NIMBUS_USERNAME=administrator line=NIMBUS_USERNAME={{ uim_admin_username }}
+    lineinfile: dest=/uim/NMS_installer.properties regexp=NIMBUS_PASSWORD=nimsoft line=NIMBUS_PASSWORD={{ uim_admin_password }}
+  - name: Run the installer
+    shell: /uim/provision.sh {{ db_admin_password }}
